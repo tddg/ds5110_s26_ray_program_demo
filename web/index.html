@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Distributed Zombie Infection</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111315;
+      --panel: #1b2024;
+      --line: #37424a;
+      --text: #f1f4f2;
+      --muted: #a8b3ad;
+      --human: #4cc9f0;
+      --zombie: #7bd957;
+      --accent: #ffb703;
+      --danger: #ef476f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #171b1f;
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    a, button {
+      color: var(--text);
+      border: 1px solid var(--line);
+      background: #22282d;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    button:hover, a:hover { border-color: var(--accent); }
+    main {
+      display: grid;
+      grid-template-columns: minmax(520px, 1fr) 360px;
+      gap: 16px;
+      padding: 16px;
+      min-height: 0;
+    }
+    .stage {
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: #15191c;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: auto;
+    }
+    aside {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 12px;
+      min-height: 0;
+    }
+    .stats, .nodes, .log {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .control {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .control-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .metric {
+      background: #121619;
+      border: 1px solid #2b3338;
+      border-radius: 6px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 24px;
+      font-weight: 760;
+      line-height: 1.1;
+    }
+    h2 {
+      font-size: 14px;
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-weight: 680;
+      text-transform: uppercase;
+    }
+    .node, .region {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 8px 0;
+      border-top: 1px solid #2b3338;
+      font-size: 13px;
+    }
+    .node:first-of-type, .region:first-of-type { border-top: 0; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      display: inline-block;
+      background: var(--accent);
+    }
+    .human { color: var(--human); }
+    .zombie { color: var(--zombie); }
+    .log {
+      min-height: 0;
+      overflow: auto;
+    }
+    @media (max-width: 880px) {
+      main { grid-template-columns: 1fr; }
+      .stage { min-height: 58vh; }
+      aside { grid-template-rows: auto auto auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Distributed Zombie Infection</h1>
+    <div class="top-actions">
+      <a id="dashboard" href="#" target="_blank" rel="noreferrer">Ray Dashboard</a>
+      <button id="reset" type="button">Reset</button>
+    </div>
+  </header>
+  <main>
+    <section class="stage">
+      <canvas id="game"></canvas>
+    </section>
+    <aside>
+      <section class="stats">
+        <h2>Global State</h2>
+        <div class="stats-grid">
+          <div class="metric"><div class="label">Tick</div><div class="value" id="tick">0</div></div>
+          <div class="metric"><div class="label">Humans</div><div class="value human" id="humans">0</div></div>
+          <div class="metric"><div class="label">Zombies</div><div class="value zombie" id="zombies">0</div></div>
+        </div>
+        <div class="control">
+          <div class="control-row">
+            <span>CPU load per region task</span>
+            <strong id="cpuValue">0%</strong>
+          </div>
+          <input id="cpuLoad" type="range" min="0" max="100" value="0" step="5" aria-label="CPU load per region task">
+        </div>
+      </section>
+      <section class="nodes">
+        <h2>Ray Nodes</h2>
+        <div id="nodes"></div>
+      </section>
+      <section class="log">
+        <h2>Region Tasks</h2>
+        <div id="regions"></div>
+      </section>
+    </aside>
+  </main>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const tickEl = document.getElementById('tick');
+    const humansEl = document.getElementById('humans');
+    const zombiesEl = document.getElementById('zombies');
+    const cpuLoadEl = document.getElementById('cpuLoad');
+    const cpuValueEl = document.getElementById('cpuValue');
+    const nodesEl = document.getElementById('nodes');
+    const regionsEl = document.getElementById('regions');
+    const dashboardEl = document.getElementById('dashboard');
+    let latest = null;
+
+    function resize() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(640, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(420, Math.floor(rect.height * dpr));
+      draw();
+    }
+
+    function drawHuman(ctx, x, y, radius) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.lineWidth = Math.max(1, radius * 0.18);
+      ctx.strokeStyle = '#12323c';
+      ctx.fillStyle = '#ffd7a8';
+      ctx.beginPath();
+      ctx.arc(0, -radius * 0.26, radius * 0.78, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#3b2a1f';
+      ctx.beginPath();
+      ctx.arc(0, -radius * 0.58, radius * 0.78, Math.PI, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#172126';
+      ctx.beginPath();
+      ctx.arc(-radius * 0.24, -radius * 0.24, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(radius * 0.24, -radius * 0.24, radius * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#172126';
+      ctx.beginPath();
+      ctx.arc(0, radius * 0.02, radius * 0.26, 0.15, Math.PI - 0.15);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawZombie(ctx, x, y, radius) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.lineWidth = Math.max(1, radius * 0.18);
+      ctx.strokeStyle = '#1e3d21';
+      ctx.fillStyle = '#84d66f';
+      ctx.beginPath();
+      ctx.arc(0, -radius * 0.18, radius * 0.86, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#5fae50';
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.48, -radius * 0.94);
+      ctx.lineTo(-radius * 0.18, -radius * 1.28);
+      ctx.lineTo(radius * 0.02, -radius * 0.88);
+      ctx.lineTo(radius * 0.32, -radius * 1.18);
+      ctx.lineTo(radius * 0.46, -radius * 0.78);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#f8fff2';
+      ctx.beginPath();
+      ctx.arc(-radius * 0.28, -radius * 0.24, radius * 0.18, 0, Math.PI * 2);
+      ctx.arc(radius * 0.3, -radius * 0.28, radius * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#1a2b1a';
+      ctx.beginPath();
+      ctx.arc(-radius * 0.24, -radius * 0.2, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(radius * 0.36, -radius * 0.22, radius * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#1a2b1a';
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.36, radius * 0.22);
+      ctx.lineTo(-radius * 0.12, radius * 0.08);
+      ctx.lineTo(radius * 0.14, radius * 0.24);
+      ctx.lineTo(radius * 0.42, radius * 0.08);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function draw() {
+      if (!latest) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const grid = latest.grid;
+      const scale = Math.min(w / grid.width, h / grid.height);
+      const ox = (w - grid.width * scale) / 2;
+      const oy = (h - grid.height * scale) / 2;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#101416';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#182024';
+      ctx.fillRect(ox, oy, grid.width * scale, grid.height * scale);
+
+      ctx.strokeStyle = '#4b5961';
+      ctx.lineWidth = Math.max(1, scale * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(ox + (grid.width / 2) * scale, oy);
+      ctx.lineTo(ox + (grid.width / 2) * scale, oy + grid.height * scale);
+      ctx.moveTo(ox, oy + (grid.height / 2) * scale);
+      ctx.lineTo(ox + grid.width * scale, oy + (grid.height / 2) * scale);
+      ctx.stroke();
+
+      for (const agent of latest.agents) {
+        const x = ox + agent.x * scale;
+        const y = oy + agent.y * scale;
+        const radius = Math.max(4.5, scale * 0.62);
+        if (agent.kind === 'zombie') {
+          drawZombie(ctx, x, y, radius);
+        } else {
+          drawHuman(ctx, x, y, radius);
+        }
+      }
+    }
+
+    function updateText(data) {
+      tickEl.textContent = data.tick;
+      humansEl.textContent = data.totals.humans;
+      zombiesEl.textContent = data.totals.zombies;
+      const cpuPercent = Math.round((data.cpu_load || 0) * 100);
+      cpuValueEl.textContent = `${cpuPercent}%`;
+      if (document.activeElement !== cpuLoadEl) cpuLoadEl.value = cpuPercent;
+      if (data.dashboard_url) dashboardEl.href = data.dashboard_url;
+
+      const nodes = Object.values(data.node_map || {});
+      nodesEl.innerHTML = nodes.map(node => `
+        <div class="node">
+          <span><span class="dot"></span> ${node.ip}</span>
+          <span class="pill">${Number(node.resources?.CPU || 0).toFixed(0)} CPU</span>
+        </div>
+      `).join('');
+
+      regionsEl.innerHTML = (data.regions || []).map(region => `
+        <div class="region">
+          <span>Region ${region.region_id} on ${region.node_ip}</span>
+          <span><span class="human">${region.humans}</span> / <span class="zombie">${region.zombies}</span></span>
+        </div>
+      `).join('');
+    }
+
+    async function poll() {
+      try {
+        const response = await fetch('/state');
+        latest = await response.json();
+        updateText(latest);
+        draw();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    document.getElementById('reset').addEventListener('click', async () => {
+      await fetch('/reset');
+      await poll();
+    });
+    let cpuTimer = null;
+    cpuLoadEl.addEventListener('input', () => {
+      cpuValueEl.textContent = `${cpuLoadEl.value}%`;
+      clearTimeout(cpuTimer);
+      cpuTimer = setTimeout(async () => {
+        await fetch(`/cpu?value=${Number(cpuLoadEl.value) / 100}`);
+        await poll();
+      }, 120);
+    });
+    window.addEventListener('resize', resize);
+    resize();
+    poll();
+    setInterval(poll, 350);
+  </script>
+</body>
+</html>

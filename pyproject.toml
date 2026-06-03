@@ -1,0 +1,12 @@
+[project]
+name = "ray-demo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=7.2.0",
+    "ipywidgets>=8.1.8",
+    "jupyterlab>=4.5.7",
+    "notebook>=7.5.6",
+    "numpy==2.4.6",
+    "ray[default]==2.55.1",
+]

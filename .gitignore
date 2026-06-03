@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.log
+*.pid
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+/ray-start-status.log

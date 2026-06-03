@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GridWorld Treasure Escape</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101214;
+      --panel: #1b2024;
+      --line: #38444b;
+      --text: #f3f6f5;
+      --muted: #a9b5b0;
+      --agent: #4cc9f0;
+      --treasure: #ffbf47;
+      --exit: #7bd957;
+      --lava: #ef476f;
+      --wall: #6c757d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #171b1f;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    h1 { margin: 0; font-size: 20px; letter-spacing: 0; }
+    button, select, input, .button-link {
+      border: 1px solid var(--line);
+      background: #242b30;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+    button, .button-link {
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
+    }
+    button:hover, .button-link:hover { border-color: var(--treasure); }
+    button:active, .button-link:active { transform: translateY(1px); }
+    button.busy {
+      border-color: var(--treasure);
+      background: #3a3322;
+      box-shadow: 0 0 0 3px rgba(255, 191, 71, 0.14);
+    }
+    button.clicked { animation: clickPulse 360ms ease; }
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      min-height: 37px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    @keyframes clickPulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 191, 71, 0.42); }
+      100% { box-shadow: 0 0 0 8px rgba(255, 191, 71, 0); }
+    }
+    main {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: minmax(430px, 1fr) 420px;
+      gap: 16px;
+      min-height: 0;
+    }
+    .board-wrap {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #15191c;
+      display: grid;
+      justify-items: center;
+      align-items: start;
+      min-height: 560px;
+      padding: 16px;
+      overflow: auto;
+    }
+    .board {
+      width: min(76vh, 92vw, 760px);
+      aspect-ratio: 1;
+      display: grid;
+      border: 2px solid #4d5b63;
+      background: #20262a;
+    }
+    .cell {
+      border: 1px solid #3d484f;
+      display: grid;
+      place-items: center;
+      position: relative;
+      font-size: var(--cell-font, 28px);
+      font-weight: 800;
+      min-width: 0;
+      cursor: pointer;
+    }
+    .cell:hover { outline: 2px solid var(--treasure); outline-offset: -2px; }
+    .wall { background: #4b5258; }
+    .lava { background: #4c202d; color: #ffd1dc; }
+    .exit { background: #1f3b2b; color: var(--exit); }
+    .treasure { background: #42371c; color: var(--treasure); }
+    .start { box-shadow: inset 0 0 0 3px rgba(76, 201, 240, 0.55); }
+    .agent {
+      width: 42%;
+      height: 42%;
+      border-radius: 999px;
+      background: var(--agent);
+      box-shadow: 0 0 0 5px rgba(76, 201, 240, 0.22);
+      z-index: 3;
+    }
+    .trail {
+      width: 28%;
+      height: 28%;
+      border-radius: 999px;
+      background: rgba(255, 191, 71, 0.55);
+      position: absolute;
+      z-index: 2;
+    }
+    .current-step {
+      outline: 3px solid var(--agent);
+      outline-offset: -3px;
+    }
+    .badge {
+      position: absolute;
+      right: 6px;
+      bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    aside {
+      display: grid;
+      grid-template-rows: auto auto auto auto 1fr;
+      gap: 12px;
+      min-height: 0;
+    }
+    section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .metric {
+      background: #121619;
+      border: 1px solid #2b3338;
+      border-radius: 6px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .value { font-size: 22px; font-weight: 760; line-height: 1.1; }
+    .controls, .editor-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tool.active { border-color: var(--treasure); background: #3a3322; }
+    .slider, .field { display: grid; gap: 5px; color: var(--muted); font-size: 13px; }
+    input[type="range"] { width: 100%; accent-color: var(--treasure); }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 7px 0;
+      border-top: 1px solid #2b3338;
+      font-size: 13px;
+    }
+    .row:first-child { border-top: 0; }
+    .history {
+      min-height: 0;
+      overflow: auto;
+      font-variant-numeric: tabular-nums;
+    }
+    .event-log {
+      margin-top: 10px;
+      max-height: 120px;
+      overflow: auto;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid #2b3338;
+      padding-top: 8px;
+    }
+    @media (max-width: 930px) {
+      main { grid-template-columns: 1fr; }
+      .board-wrap { min-height: 440px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>GridWorld Treasure Escape</h1>
+    <div class="header-actions">
+      <a class="button-link" href="http://98.91.178.133:8265" target="_blank" rel="noreferrer">Ray Dashboard</a>
+      <button id="train">Train</button>
+      <button id="stop">Stop</button>
+      <button id="reset">Reset learning</button>
+      <button id="run">Run current policy</button>
+    </div>
+  </header>
+  <main>
+    <div class="board-wrap">
+      <div id="board" class="board"></div>
+    </div>
+    <aside>
+      <section>
+        <h2>Training Batch</h2>
+        <div class="metrics">
+          <div class="metric"><div class="label">Episodes</div><div id="episodes" class="value">0</div></div>
+          <div class="metric"><div class="label">Train reward</div><div id="reward" class="value">0</div></div>
+          <div class="metric"><div class="label">Train success</div><div id="success" class="value">0%</div></div>
+        </div>
+        <div class="metrics" style="margin-top: 8px;">
+          <div class="metric"><div class="label">Eval episodes</div><div id="evalEpisodes" class="value">0</div></div>
+          <div class="metric"><div class="label">Greedy reward</div><div id="evalReward" class="value">0</div></div>
+          <div class="metric"><div class="label">Greedy success</div><div id="evalSuccess" class="value">0%</div></div>
+        </div>
+        <div class="metrics" style="margin-top: 8px;">
+          <div class="metric"><div class="label">Time to 100%</div><div id="timeTo100" class="value">--</div></div>
+          <div class="metric"><div class="label">Alpha</div><div id="alphaMetric" class="value">0.25</div></div>
+          <div class="metric"><div class="label">Epsilon</div><div id="epsilonMetric" class="value">0.25</div></div>
+        </div>
+      </section>
+      <section>
+        <h2>Grid Editor</h2>
+        <div id="saveStatus" class="row">
+          <span>Grid status</span>
+          <span>saved</span>
+        </div>
+        <div class="editor-grid">
+      <label class="field">Width <input id="width" type="number" min="3" max="50" value="4"></label>
+      <label class="field">Height <input id="height" type="number" min="3" max="50" value="4"></label>
+        </div>
+        <div class="toolbar">
+          <button class="tool active" data-tool="start">Start</button>
+          <button class="tool" data-tool="treasure">Treasure</button>
+          <button class="tool" data-tool="exit">Exit</button>
+          <button class="tool" data-tool="lava">Lava</button>
+          <button class="tool" data-tool="wall">Wall</button>
+          <button class="tool" data-tool="clear">Clear</button>
+        </div>
+        <div class="toolbar">
+          <button id="resize">Resize grid</button>
+          <button id="saveGrid">Save grid</button>
+          <button id="defaultGrid">Default</button>
+        </div>
+        <div id="runLog" class="event-log"></div>
+      </section>
+      <section>
+        <h2>Hyperparameters</h2>
+        <div class="controls">
+          <label class="slider">Alpha <strong id="alphaValue">0.25</strong><input id="alpha" type="range" min="0.05" max="0.8" step="0.05" value="0.25"></label>
+          <label class="slider">Epsilon <strong id="epsilonValue">0.25</strong><input id="epsilon" type="range" min="0" max="0.8" step="0.05" value="0.25"></label>
+        </div>
+      </section>
+      <section>
+        <h2>Ray Workers</h2>
+        <div id="workers"></div>
+      </section>
+      <section class="history">
+        <h2>Learning Curve</h2>
+        <div id="history"></div>
+      </section>
+    </aside>
+  </main>
+  <script>
+    const boardEl = document.getElementById('board');
+    const tools = document.querySelectorAll('.tool');
+    let env = {
+      width: 4,
+      height: 4,
+      start: [0, 0],
+      treasure: [3, 0],
+      exit: [3, 3],
+      lava: [[2, 2]],
+      walls: [[1, 1]],
+    };
+    let selectedTool = 'start';
+    let latest = null;
+    let animatedPath = null;
+    let policyTimer = null;
+    let envDirty = false;
+
+    const keyOf = (cell) => `${cell[0]},${cell[1]}`;
+    const sameCell = (a, b) => a && b && a[0] === b[0] && a[1] === b[1];
+
+    function isReserved(x, y) {
+      return sameCell(env.start, [x, y]) || sameCell(env.treasure, [x, y]) || sameCell(env.exit, [x, y]);
+    }
+
+    function removeFromLists(x, y) {
+      env.lava = env.lava.filter(cell => !sameCell(cell, [x, y]));
+      env.walls = env.walls.filter(cell => !sameCell(cell, [x, y]));
+    }
+
+    function setTool(tool) {
+      selectedTool = tool;
+      for (const button of tools) button.classList.toggle('active', button.dataset.tool === tool);
+    }
+
+    async function withButtonFeedback(button, action) {
+      button.classList.remove('clicked');
+      button.classList.add('busy');
+      try {
+        await action();
+      } finally {
+        button.classList.remove('busy');
+        button.classList.add('clicked');
+        window.setTimeout(() => button.classList.remove('clicked'), 420);
+      }
+    }
+
+    function setDirty(value) {
+      envDirty = value;
+      const status = document.getElementById('saveStatus');
+      status.lastElementChild.textContent = value ? 'unsaved' : 'saved';
+      status.lastElementChild.style.color = value ? 'var(--treasure)' : 'var(--muted)';
+    }
+
+    function resizeLocalGrid() {
+      env.width = Math.min(Math.max(Number(document.getElementById('width').value) || 4, 3), 50);
+      env.height = Math.min(Math.max(Number(document.getElementById('height').value) || 4, 3), 50);
+      env.start = [0, 0];
+      env.treasure = [env.width - 1, 0];
+      env.exit = [env.width - 1, env.height - 1];
+      env.lava = [];
+      env.walls = [];
+      setDirty(true);
+      buildBoard();
+    }
+
+    function placeCell(x, y) {
+      removeFromLists(x, y);
+      if (selectedTool === 'start') env.start = [x, y];
+      if (selectedTool === 'treasure') env.treasure = [x, y];
+      if (selectedTool === 'exit') env.exit = [x, y];
+      if (selectedTool === 'lava' && !isReserved(x, y)) env.lava.push([x, y]);
+      if (selectedTool === 'wall' && !isReserved(x, y)) env.walls.push([x, y]);
+      if (selectedTool === 'clear') {
+        if (sameCell(env.start, [x, y])) env.start = null;
+        if (sameCell(env.treasure, [x, y])) env.treasure = null;
+        if (sameCell(env.exit, [x, y])) env.exit = null;
+      }
+      setDirty(true);
+      buildBoard();
+    }
+
+    function cellClass(x, y) {
+      if (sameCell(env.start, [x, y])) return 'start';
+      if (sameCell(env.treasure, [x, y])) return 'treasure';
+      if (sameCell(env.exit, [x, y])) return 'exit';
+      if (env.lava.some(cell => sameCell(cell, [x, y]))) return 'lava';
+      if (env.walls.some(cell => sameCell(cell, [x, y]))) return 'wall';
+      return '';
+    }
+
+    function cellText(x, y) {
+      if (sameCell(env.start, [x, y])) return 'S';
+      if (sameCell(env.treasure, [x, y])) return 'T';
+      if (sameCell(env.exit, [x, y])) return 'E';
+      if (env.lava.some(cell => sameCell(cell, [x, y]))) return 'L';
+      if (env.walls.some(cell => sameCell(cell, [x, y]))) return '#';
+      return '';
+    }
+
+    function buildBoard() {
+      document.getElementById('width').value = env.width;
+      document.getElementById('height').value = env.height;
+      boardEl.style.gridTemplateColumns = `repeat(${env.width}, 1fr)`;
+      boardEl.style.gridTemplateRows = `repeat(${env.height}, 1fr)`;
+      const maxDim = Math.max(env.width, env.height);
+      boardEl.style.setProperty('--cell-font', maxDim > 24 ? '9px' : maxDim > 14 ? '14px' : '28px');
+      boardEl.innerHTML = '';
+      for (let y = 0; y < env.height; y++) {
+        for (let x = 0; x < env.width; x++) {
+          const cell = document.createElement('div');
+          cell.className = `cell ${cellClass(x, y)}`;
+          cell.dataset.x = x;
+          cell.dataset.y = y;
+          cell.textContent = cellText(x, y);
+          cell.onclick = () => placeCell(x, y);
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          cell.appendChild(badge);
+          boardEl.appendChild(cell);
+        }
+      }
+      if (latest) drawPolicy(latest.policy);
+      if (env.start) drawAgent({x: env.start[0], y: env.start[1]});
+    }
+
+    function drawAgent(step) {
+      for (const old of boardEl.querySelectorAll('.agent')) old.remove();
+      for (const cell of boardEl.children) cell.classList.remove('current-step');
+      const cell = [...boardEl.children].find(item => Number(item.dataset.x) === step.x && Number(item.dataset.y) === step.y);
+      if (!cell) return;
+      cell.classList.add('current-step');
+      const agent = document.createElement('div');
+      agent.className = 'agent';
+      cell.appendChild(agent);
+    }
+
+    function drawTrail(step) {
+      const cell = [...boardEl.children].find(item => Number(item.dataset.x) === step.x && Number(item.dataset.y) === step.y);
+      if (!cell || cell.querySelector('.trail')) return;
+      const marker = document.createElement('div');
+      marker.className = 'trail';
+      cell.appendChild(marker);
+    }
+
+    function drawPolicy(policy) {
+      for (const cell of boardEl.children) {
+        const badge = cell.querySelector('.badge');
+        const x = Number(cell.dataset.x);
+        const y = Number(cell.dataset.y);
+        const stateKey = `${x},${y},0`;
+        const action = policy?.[stateKey] || '';
+        badge.textContent = {up: '↑', down: '↓', left: '←', right: '→'}[action] || '';
+      }
+    }
+
+    function update(data) {
+      latest = data;
+      if (!envDirty && !animatedPath) {
+        env = data.env;
+        buildBoard();
+      } else {
+        drawPolicy(data.policy);
+      }
+      const last = data.history[data.history.length - 1] || {avg_reward: 0, success_rate: 0};
+      document.getElementById('episodes').textContent = data.episodes;
+      document.getElementById('reward').textContent = last.avg_reward;
+      document.getElementById('success').textContent = `${Math.round((last.success_rate || 0) * 100)}%`;
+      document.getElementById('evalEpisodes').textContent = data.evaluation?.episodes || 0;
+      document.getElementById('evalReward').textContent = data.evaluation?.avg_reward || 0;
+      document.getElementById('evalSuccess').textContent = `${Math.round((data.evaluation?.success_rate || 0) * 100)}%`;
+      document.getElementById('timeTo100').textContent = data.time_to_greedy_100 === null ? '--' : `${data.time_to_greedy_100}s`;
+      document.getElementById('alphaMetric').textContent = Number(data.alpha).toFixed(2);
+      document.getElementById('epsilonMetric').textContent = Number(data.epsilon).toFixed(2);
+      document.getElementById('alpha').value = data.alpha;
+      document.getElementById('epsilon').value = data.epsilon;
+      document.getElementById('alphaValue').textContent = Number(data.alpha).toFixed(2);
+      document.getElementById('epsilonValue').textContent = Number(data.epsilon).toFixed(2);
+      document.getElementById('workers').innerHTML = data.workers.map(worker => `
+        <div class="row">
+          <span>${worker.node_ip}</span>
+          <span>${Math.round(worker.success_rate * 100)}% / ${worker.avg_reward}</span>
+        </div>
+      `).join('');
+      document.getElementById('history').innerHTML = data.history.slice(-16).reverse().map(item => `
+        <div class="row">
+          <span>${item.episodes} episodes</span>
+          <span>${item.avg_reward} · ${Math.round(item.success_rate * 100)}%</span>
+        </div>
+      `).join('');
+    }
+
+    async function poll() {
+      const response = await fetch('/state');
+      update(await response.json());
+    }
+
+    function runPolicy() {
+      if (!latest) return;
+      stopPolicyRun();
+      animatedPath = latest.path;
+      let pathIndex = 0;
+      const log = document.getElementById('runLog');
+      log.innerHTML = '';
+      for (const old of boardEl.querySelectorAll('.trail')) old.remove();
+      const timer = setInterval(() => {
+        const step = animatedPath[pathIndex];
+        drawTrail(step);
+        drawAgent(step);
+        const action = step.action ? `${step.action} -> ` : '';
+        const reward = step.reward === undefined ? '' : ` reward ${step.reward}`;
+        log.innerHTML = `<div>${pathIndex}. ${action}(${step.x}, ${step.y}) ${step.event}${reward}</div>` + log.innerHTML;
+        pathIndex += 1;
+        if (pathIndex >= animatedPath.length) {
+          clearInterval(policyTimer);
+          policyTimer = null;
+          animatedPath = null;
+        }
+      }, 550);
+      policyTimer = timer;
+    }
+
+    function stopPolicyRun() {
+      if (policyTimer) {
+        clearInterval(policyTimer);
+        policyTimer = null;
+      }
+      animatedPath = null;
+    }
+
+    async function saveGrid() {
+      const response = await fetch('/env', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(env),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        const status = document.getElementById('saveStatus');
+        status.lastElementChild.textContent = result.error || 'invalid grid';
+        status.lastElementChild.style.color = 'var(--lava)';
+        throw new Error(result.error || 'invalid grid');
+      }
+      setDirty(false);
+      await poll();
+    }
+
+    async function ensureSavedGrid() {
+      if (envDirty) await saveGrid();
+    }
+
+    async function trainCurrentGrid() {
+      try {
+        await ensureSavedGrid();
+      } catch {
+        return;
+      }
+      await fetch('/train');
+      await poll();
+    }
+
+    async function runCurrentPolicy() {
+      try {
+        await ensureSavedGrid();
+      } catch {
+        return;
+      }
+      await poll();
+      runPolicy();
+    }
+
+    async function setConfig() {
+      const alpha = document.getElementById('alpha').value;
+      const epsilon = document.getElementById('epsilon').value;
+      document.getElementById('alphaValue').textContent = Number(alpha).toFixed(2);
+      document.getElementById('epsilonValue').textContent = Number(epsilon).toFixed(2);
+      await fetch(`/config?alpha=${alpha}&epsilon=${epsilon}`);
+    }
+
+    for (const button of tools) {
+      button.onclick = () => {
+        setTool(button.dataset.tool);
+        button.classList.remove('clicked');
+        button.classList.add('clicked');
+        window.setTimeout(() => button.classList.remove('clicked'), 420);
+      };
+    }
+    document.getElementById('resize').onclick = (event) => withButtonFeedback(event.currentTarget, async () => resizeLocalGrid());
+    document.getElementById('saveGrid').onclick = (event) => withButtonFeedback(event.currentTarget, saveGrid);
+    document.getElementById('defaultGrid').onclick = (event) => withButtonFeedback(event.currentTarget, async () => {
+      env = {width: 4, height: 4, start: [0, 0], treasure: [3, 0], exit: [3, 3], lava: [[2, 2]], walls: [[1, 1]]};
+      setDirty(true);
+      buildBoard();
+      await saveGrid();
+    });
+    document.getElementById('train').onclick = (event) => withButtonFeedback(event.currentTarget, trainCurrentGrid);
+    document.getElementById('stop').onclick = (event) => withButtonFeedback(event.currentTarget, async () => { stopPolicyRun(); await fetch('/stop'); });
+    document.getElementById('reset').onclick = (event) => withButtonFeedback(event.currentTarget, async () => { await fetch('/reset'); await poll(); });
+    document.getElementById('run').onclick = (event) => withButtonFeedback(event.currentTarget, runCurrentPolicy);
+    document.getElementById('alpha').oninput = setConfig;
+    document.getElementById('epsilon').oninput = setConfig;
+    buildBoard();
+    poll();
+    setInterval(poll, 900);
+  </script>
+</body>
+</html>
