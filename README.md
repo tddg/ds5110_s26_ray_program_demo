@@ -83,6 +83,20 @@ cd word_count_mr
 PORT=8100 RAY_ADDRESS=auto ./start.sh
 ```
 
+## GridWorld Q-Learning Design
+
+The GridWorld demo trains an agent to collect treasure and reach the exit while avoiding lava and walls. A state is encoded as `x,y,has_treasure`, so the policy can learn different actions before and after treasure is collected. The Q-table maps each state to four action values: `up`, `down`, `left`, and `right`.
+
+Training uses epsilon-greedy Q-learning. Each episode starts at the start cell, explores or follows the current best action, receives rewards from the environment, and updates the selected action value with:
+
+```text
+Q(s,a) = Q(s,a) + alpha * (reward + gamma * max(Q(next_state,*)) - Q(s,a))
+```
+
+The reward model gives a small cost for each move, a penalty for lava, a bonus for treasure, and the largest bonus for reaching the exit after collecting treasure.
+
+The training is distributed with Ray. The HTTP server owns the current global Q-table, then each training round launches several `train_worker` Ray tasks. Every worker receives a copy of the environment and Q-table, runs many episodes independently, and returns an updated Q-table plus worker statistics. The server averages the returned Q-values to form the next global Q-table, evaluates the greedy policy, and exposes the latest policy, path, worker locations, and metrics through `/state` for the browser UI.
+
 ## Test
 
 The included test exercises the MapReduce functions against a running Ray cluster:
